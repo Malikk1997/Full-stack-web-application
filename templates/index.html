@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Image and Video Processor</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            background: url('/static/bg.jpeg') no-repeat center center fixed;
+            background-size: cover;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+        .bg-primary {
+            background-color: #0F172A;
+        }
+        .hover\:bg-primary:hover {
+            background-color: #0F172A;
+        }
+        .text-primary {
+            color: #0F172A;
+        }
+        .border-primary {
+            border-color: #d1e0ff;
+        }
+        .transition-all {
+            transition: all 0.3s ease;
+        }
+        .container {
+            background-color: rgba(255, 255, 255, 0.9);
+            width: 100%;
+            max-width: 900px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .file-inputs {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        .previews {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .preview {
+            display: none; /* Hide initially */
+            flex: 1;
+            height: 300px;
+            border: 1px solid #ccc;
+            padding: 0.5rem;
+            align-items: center;
+            justify-content: center;
+        }
+        .preview img,
+        .preview video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        @media (max-width: 768px) {
+            .file-inputs {
+                flex-direction: column;
+            }
+            .preview {
+                height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-2xl font-bold text-primary mb-4 text-center">Image and Video Processor</h1>
+        <form id="uploadForm" class="space-y-4">
+            <div class="previews" id="previewsContainer">
+                <div class="preview" id="imagePreviewContainer">
+                    <img id="imagePreview" alt="Image preview">
+                </div>
+                <div class="preview" id="videoPreviewContainer">
+                    <video id="videoPreview" controls></video>
+                </div>
+            </div>
+            <div class="file-inputs">
+                <div class="w-full">
+                    <label for="image" class="block text-sm font-medium text-gray-700 mb-2">Image File:</label>
+                    <input type="file" id="image" name="image" required class="w-full p-2 border border-gray-300 rounded">
+                </div>
+                <div class="w-full">
+                    <label for="video" class="block text-sm font-medium text-gray-700 mb-2">Video File:</label>
+                    <input type="file" id="video" name="video" required class="w-full p-2 border border-gray-300 rounded">
+                </div>
+            </div>
+            <button type="submit" id="uploadButton" class="w-full bg-primary text-white px-4 py-2 rounded transition-all hover:bg-primary hover:shadow-lg flex items-center justify-center">
+                <i class="fas fa-upload mr-2"></i>
+                <span>Upload and Process Files</span>
+            </button>
+        </form>
+        <div id="status" class="mt-4"></div> <!-- Added status div -->
+    </div>
+    <script>
+        const imageUpload = document.getElementById('image');
+        const videoUpload = document.getElementById('video');
+        const imagePreview = document.getElementById('imagePreview');
+        const videoPreview = document.getElementById('videoPreview');
+        const uploadForm = document.getElementById('uploadForm');
+        const uploadButton = document.getElementById('uploadButton');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const videoPreviewContainer = document.getElementById('videoPreviewContainer');
+        const statusDiv = document.getElementById('status'); // Status div
+
+        imageUpload.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imagePreview.src = e.target.result;
+                    imagePreviewContainer.style.display = 'flex'; // Show the preview container
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        videoUpload.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                videoPreview.src = url;
+                videoPreviewContainer.style.display = 'flex'; // Show the preview container
+            }
+        });
+
+        uploadForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            uploadButton.disabled = true;
+            uploadButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
+            statusDiv.innerHTML = ''; // Clear the status div
+
+            const formData = new FormData(uploadForm);
+
+            fetch('http://127.0.0.1:5001/upload_files', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const requestId = data.request_id;
+                const checkStatus = () => {
+                    fetch(`http://127.0.0.1:5001/status/${requestId}`)
+                    .then(response => response.json())
+                    .then(statusData => {
+                        if (statusData.status === 'Processing') {
+                            statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
+                            setTimeout(checkStatus, 2000);
+                        } else {
+                            statusDiv.innerHTML = statusData.status;
+                            if (statusData.status === 'Completed') {
+                                videoPreview.src = statusData.result.output_video_url;
+                                videoPreviewContainer.style.display = 'flex'; // Show the video preview container
+                                uploadButton.innerHTML = '<i class="fas fa-check mr-2"></i>Processed';
+                            } else {
+                                uploadButton.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Error';
+                                alert('An error occurred while processing the files. Please try again.');
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking status:', error);
+                        statusDiv.innerHTML = 'An error occurred while checking the status. Please try again.';
+                    });
+                };
+
+                checkStatus();
+            })
+            .catch(error => {
+                console.error('Error processing files:', error);
+                uploadButton.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Error';
+                alert('An error occurred while processing the files. Please try again.');
+            })
+            .finally(() => {
+                uploadButton.disabled = false;
+            });
+        });
+    </script>
+</body>
+</html>
